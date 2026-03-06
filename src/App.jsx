@@ -302,6 +302,7 @@ function App() {
     formData.append('file_name', recordingForm.audio.name);
     formData.append('mime_type', recordingForm.audio.type);
     formData.append('file_size', recordingForm.audio.size);
+    formData.append('duration', recordingForm.audio.duration || 0);
     formData.append('timestamp', new Date().toISOString());
 
     try {
@@ -818,7 +819,17 @@ function App() {
                     id="audio-input"
                     type="file"
                     accept="audio/*"
-                    onChange={(e) => setRecordingForm({ ...recordingForm, audio: e.target.files[0] })}
+                    onChange={(e) => {
+                      const file = e.target.files[0];
+                      if (file) {
+                        const audio = new Audio(URL.createObjectURL(file));
+                        audio.onloadedmetadata = () => {
+                          file.duration = Math.round(audio.duration);
+                          setRecordingForm({ ...recordingForm, audio: file });
+                          URL.revokeObjectURL(audio.src);
+                        };
+                      }
+                    }}
                     required
                     style={{ padding: '0.5rem 0' }}
                   />
