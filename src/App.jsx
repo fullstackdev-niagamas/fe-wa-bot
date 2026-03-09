@@ -37,7 +37,20 @@ const formatPrice = (value) => {
 };
 
 function App() {
-  const [activeTab, setActiveTab] = useState('reminder');
+  const availableTabs = [
+    { id: 'reminder', label: 'Reminder Tagihan', title: 'Billing Reminder', icon: <Calendar size={20} /> },
+    { id: 'promo', label: 'Broadcast Promo', title: 'Promo Broadcast', icon: <Megaphone size={20} /> },
+    { id: 'groups', label: 'Group Tracking', title: 'Group Tracking', icon: <Users size={20} /> },
+    { id: 'messages', label: 'View Message', title: 'Inbound Messages', icon: <MessageSquare size={20} /> },
+    { id: 'recordings', label: 'Call Recordings', title: 'Call Recordings', icon: <Mic size={20} /> },
+    { id: 'sessions', label: 'WAHA Sessions', title: 'WAHA Sessions', icon: <Settings size={20} /> },
+  ];
+
+  const disabledMenus = (import.meta.env.VITE_DISABLED_MENUS || "").split(',').map(s => s.trim());
+  const enabledTabs = availableTabs.filter(tab => !disabledMenus.includes(tab.id));
+  const initialTab = enabledTabs[0]?.id || 'reminder';
+
+  const [activeTab, setActiveTab] = useState(initialTab);
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [sessions, setSessions] = useState(null);
@@ -50,6 +63,8 @@ function App() {
   const [fetchingMessages, setFetchingMessages] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
+  const [viewMessages, setViewMessages] = useState([]);
+  const [isFetchingViewMessages, setIsFetchingViewMessages] = useState(false);
 
   const showToast = (message, type = 'success') => {
     setToast({ visible: true, message, type });
@@ -334,9 +349,82 @@ function App() {
       showToast('Upload success!');
     } catch (err) {
       addLog(`Upload error: ${err.response?.data?.message || err.message}`, 'error');
-    } finally {
-      setLoading(false);
     }
+  };
+
+  const fetchViewMessages = async () => {
+    setIsFetchingViewMessages(true);
+    try {
+      addLog('Fetching inbound messages from n8n...', 'info');
+      const res = await axios.post(`${API_BASE_URL}/fetch-message`);
+      const data = Array.isArray(res.data) ? res.data : (res.data.data || []);
+      setViewMessages(data);
+      addLog(`Fetched ${data.length} messages from n8n`, 'success');
+      showToast('Messages synced!');
+    } catch (err) {
+      addLog('Failed to fetch messages: ' + (err.response?.data?.message || err.message), 'error');
+      showToast('Fetch failed!', 'error');
+    } finally {
+      setIsFetchingViewMessages(false);
+    }
+  };
+
+  const handleViewFile = async (e, url, fileName) => {
+    e.preventDefault();
+    if (!url) return;
+    try {
+      addLog(`Fetching file from ${WAHA_URL}...`, 'info');
+      // Using WAHA_URL directly if it is a relative path or local WAHA path
+      // Actually, msg.file_url is likely the full URL already from the curl example
+      const response = await axios.get(url, {
+        headers: { 'X-Api-Key': API_KEY },
+        responseType: 'blob'
+      });
+      const blob = new Blob([response.data], { type: response.headers['content-type'] });
+      const blobUrl = URL.createObjectURL(blob);
+      window.open(blobUrl, '_blank');
+      addLog(`File ${fileName} opened in new tab`, 'success');
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 20000);
+    } catch (err) {
+      addLog(`Failed to fetch file: ${err.message}`, 'error');
+      showToast('Fetch failed!', 'error');
+    }
+  };
+
+  const handleExportMessages = () => {
+    if (viewMessages.length === 0) {
+      showToast('No messages to export!', 'error');
+      return;
+    }
+
+    addLog('Exporting messages to CSV...', 'info');
+
+    // Define headers
+    const headers = ['Sender Name', 'Sender Phone', 'Group Name', 'Message', 'Type', 'Timestamp', 'File URL'];
+
+    // Prepare data
+    const csvRows = viewMessages.map(msg => [
+      `"${(msg.sender_name || 'Unknown').toString().replace(/"/g, '""')}"`,
+      `"${(msg.sender_phone_number || '').toString().replace(/"/g, '""')}"`,
+      `"${(msg.group_name || '-').toString().replace(/"/g, '""')}"`,
+      `"${(msg.message_text || '').toString().replace(/"/g, '""').replace(/\n/g, ' ')}"`,
+      `"${(msg.message_type || 'text').toString().replace(/"/g, '""')}"`,
+      `"${msg.message_timestamp || ''}"`,
+      `"${(msg.file_url || '').toString().replace(/"/g, '""')}"`
+    ].join(','));
+
+    // Combine headers and rows
+    const csvString = [headers.join(','), ...csvRows].join('\n');
+    const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `inbound_messages_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    addLog('Messages exported successfully!', 'success');
   };
 
   return (
@@ -345,7 +433,7 @@ function App() {
       <header className="mobile-header">
         <div className="logo">
           <Send size={24} />
-          <span>WA-BOT ADMIN</span>
+          <span>WHATSAPP BOT</span>
         </div>
         <button className="menu-toggle" onClick={() => setSidebarOpen(true)}>
           <Menu size={24} />
@@ -357,7 +445,7 @@ function App() {
         <div className="sidebar-header">
           <div className="logo">
             <Send size={28} />
-            <span>WA-BOT ADMIN</span>
+            <span>WHATSAPP BOT</span>
           </div>
           <button className="close-sidebar" onClick={() => setSidebarOpen(false)}>
             <X size={24} />
@@ -365,41 +453,20 @@ function App() {
         </div>
 
         <nav className="nav-links">
-          <div
-            className={`nav-item ${activeTab === 'reminder' ? 'active' : ''}`}
-            onClick={() => { setActiveTab('reminder'); setSidebarOpen(false); }}
-          >
-            <Calendar size={20} />
-            <span>Reminder Tagihan</span>
-          </div>
-          <div
-            className={`nav-item ${activeTab === 'promo' ? 'active' : ''}`}
-            onClick={() => { setActiveTab('promo'); setSidebarOpen(false); }}
-          >
-            <Megaphone size={20} />
-            <span>Broadcast Promo</span>
-          </div>
-          <div
-            className={`nav-item ${activeTab === 'groups' ? 'active' : ''}`}
-            onClick={() => { setActiveTab('groups'); setSidebarOpen(false); }}
-          >
-            <Users size={20} />
-            <span>Group Tracking</span>
-          </div>
-          <div
-            className={`nav-item ${activeTab === 'recordings' ? 'active' : ''}`}
-            onClick={() => { setActiveTab('recordings'); setSidebarOpen(false); }}
-          >
-            <Mic size={20} />
-            <span>Call Recordings</span>
-          </div>
-          <div
-            className={`nav-item ${activeTab === 'sessions' ? 'active' : ''}`}
-            onClick={() => { setActiveTab('sessions'); setSidebarOpen(false); }}
-          >
-            <Settings size={20} />
-            <span>WAHA Sessions</span>
-          </div>
+          {enabledTabs.map(tab => (
+            <div
+              key={tab.id}
+              className={`nav-item ${activeTab === tab.id ? 'active' : ''}`}
+              onClick={() => {
+                setActiveTab(tab.id);
+                setSidebarOpen(false);
+                if (tab.id === 'messages') fetchViewMessages();
+              }}
+            >
+              {tab.icon}
+              <span>{tab.label}</span>
+            </div>
+          ))}
         </nav>
 
         <div className="sidebar-footer">
@@ -417,11 +484,7 @@ function App() {
       <main className="main-content">
         <div className="content-header">
           <h1>
-            {activeTab === 'reminder' ? 'Billing Reminder' :
-              activeTab === 'promo' ? 'Promo Broadcast' :
-                activeTab === 'groups' ? 'Group Tracking' :
-                  activeTab === 'recordings' ? 'Call Recordings' :
-                    'WAHA Sessions'}
+            {availableTabs.find(t => t.id === activeTab)?.title || 'Dashboard'}
           </h1>
           <p>Manage your WhatsApp marketing and notifications from here.</p>
         </div>
@@ -890,6 +953,89 @@ function App() {
                 )}
               </button>
             </form>
+          </div>
+        )}
+
+        {activeTab === 'messages' && (
+          <div className="card animate-fade">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
+              <div>
+                <h2>Inbound Messages</h2>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Recently received messages from n8n.</p>
+              </div>
+              <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                <button
+                  className="btn btn-primary"
+                  style={{ width: 'auto' }}
+                  onClick={fetchViewMessages}
+                  disabled={isFetchingViewMessages}
+                >
+                  {isFetchingViewMessages ? <Loader2 className="animate-spin" size={18} /> : <RefreshCw size={18} />}
+                  <span>Refresh Messages</span>
+                </button>
+                <button
+                  className="btn btn-primary"
+                  style={{ width: 'auto', background: 'var(--accent)' }}
+                  onClick={handleExportMessages}
+                  disabled={viewMessages.length === 0}
+                >
+                  <Download size={18} />
+                  <span>Export CSV</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="messages-table-container">
+              {viewMessages.length === 0 ? (
+                <div className="empty-state">
+                  <MessageSquare size={48} />
+                  <p>No messages found. Click refresh to fetch data.</p>
+                </div>
+              ) : (
+                <div className="messages-grid">
+                  <div className="grid-header">
+                    <div>Sender</div>
+                    <div>Group</div>
+                    <div>Message Contents</div>
+                    <div>Details</div>
+                    <div>Timestamp</div>
+                  </div>
+                  {viewMessages.map((msg, i) => (
+                    <div key={i} className="grid-row">
+                      <div className="grid-col sender-info">
+                        <div className="name">{msg.sender_name || 'Unknown'}</div>
+                        <div className="phone">{msg.sender_phone_number}</div>
+                      </div>
+                      <div className="grid-col group-name">
+                        {msg.group_name}
+                      </div>
+                      <div className="grid-col message-content">
+                        <div className="text-body">{msg.message_text || <span className="empty-text">(No text)</span>}</div>
+                        {(msg.file_url) && (
+                          <div
+                            className="file-attachment"
+                            style={{ cursor: 'pointer' }}
+                            onClick={(e) => handleViewFile(e, msg.file_url, msg.file_name)}
+                          >
+                            <Package size={14} />
+                            <span>{msg.file_name || 'Attachment'}</span>
+                            <span className="mime">({msg.file_mime_type || 'binary'})</span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="grid-col message-meta">
+                        <span className={`badge badge-${(msg.message_type || 'text').toLowerCase()}`}>
+                          {msg.message_type || 'Text'}
+                        </span>
+                      </div>
+                      <div className="grid-col timestamp">
+                        {msg.message_timestamp ? new Date(msg.message_timestamp).toLocaleString() : '-'}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
 
