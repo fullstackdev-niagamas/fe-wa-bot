@@ -20,7 +20,8 @@ import {
   Menu,
   X,
   FileUp,
-  ClipboardList
+  ClipboardList,
+  Download
 } from 'lucide-react';
 import './App.css';
 
@@ -521,6 +522,16 @@ function App() {
                       className="file-input"
                     />
                   </div>
+
+                  <a
+                    href="/template_reminder.xlsx"
+                    download="template_reminder.xlsx"
+                    className="download-template-link"
+                    style={{ marginTop: '1rem', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', color: 'var(--primary)', textDecoration: 'none', fontWeight: '600' }}
+                  >
+                    <Download size={14} />
+                    <span>Download Spreadsheet Template</span>
+                  </a>
                 </div>
 
                 <div className="info-box" style={{ margin: '1.5rem 0' }}>
@@ -654,6 +665,16 @@ function App() {
                       className="file-input"
                     />
                   </div>
+
+                  <a
+                    href="/template_promo.xlsx"
+                    download="template_promo.xlsx"
+                    className="download-template-link"
+                    style={{ marginTop: '1rem', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', color: 'var(--primary)', textDecoration: 'none', fontWeight: '600' }}
+                  >
+                    <Download size={14} />
+                    <span>Download Spreadsheet Template</span>
+                  </a>
                 </div>
 
                 <div className="info-box" style={{ margin: '1.5rem 0' }}>

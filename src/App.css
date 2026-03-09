@@ -532,3 +532,12 @@ select:focus {
 .info-box strong {
   color: #0c4a6e;
 }
+
+.download-template-link {
+  transition: all 0.2s ease;
+}
+
+.download-template-link:hover {
+  opacity: 0.8;
+  transform: translateY(-1px);
+}
