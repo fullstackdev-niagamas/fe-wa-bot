@@ -291,6 +291,15 @@ function App() {
       return;
     }
 
+    const MAX_SIZE_IN_MB = 100;
+    const MAX_SIZE = MAX_SIZE_IN_MB * 1024 * 1024;
+    if (recordingForm.audio.size > MAX_SIZE) {
+      const sizeMB = (recordingForm.audio.size / (1024 * 1024)).toFixed(2);
+      showToast(`your file size is ${sizeMB}mb, allowed file is below ${MAX_SIZE_IN_MB}mb`, 'error');
+      addLog(`Upload rejected: file size ${sizeMB}mb exceeds ${MAX_SIZE_IN_MB}mb limit`, 'error');
+      return;
+    }
+
     setLoading(true);
     const formData = new FormData();
     formData.append('data', recordingForm.audio); // for n8n
@@ -843,6 +852,17 @@ function App() {
                     onChange={(e) => {
                       const file = e.target.files[0];
                       if (file) {
+                        const MAX_SIZE_IN_MB = 100;
+                        const MAX_SIZE = MAX_SIZE_IN_MB * 1024 * 1024;
+                        if (file.size > MAX_SIZE) {
+                          const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+                          showToast(`your file size is ${sizeMB}mb, allowed file is below ${MAX_SIZE_IN_MB}mb`, 'error');
+                          addLog(`File rejected: ${file.name} is ${sizeMB}mb`, 'error');
+                          e.target.value = "";
+                          setRecordingForm({ ...recordingForm, audio: null });
+                          return;
+                        }
+
                         const audio = new Audio(URL.createObjectURL(file));
                         audio.onloadedmetadata = () => {
                           file.duration = Math.round(audio.duration);
