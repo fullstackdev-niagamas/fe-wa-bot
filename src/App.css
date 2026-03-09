@@ -162,12 +162,29 @@ body {
   border-radius: 20px;
   padding: 2.5rem;
   box-shadow: var(--shadow);
+  width: 100%;
 }
 
 .form-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 1.25rem;
+}
+
+.group-tracking-container {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  gap: 2rem;
+}
+
+.group-list-sidebar {
+  border-right: 1px solid rgba(0, 0, 0, 0.05);
+  padding-right: 1.5rem;
+}
+
+.group-detail-content {
+  min-width: 0;
+  /* Prevents overflow in flex/grid */
 }
 
 .form-group {
@@ -327,7 +344,7 @@ select:focus {
 }
 
 /* Responsive Logic */
-@media (max-width: 992px) {
+@media (max-width: 1024px) {
   .app-container {
     flex-direction: column;
   }
@@ -372,11 +389,55 @@ select:focus {
   }
 
   .main-content {
-    padding: 2rem 1rem;
+    padding: 2rem 1.5rem;
+    /* Match mobile-header padding for alignment */
+  }
+
+  .card {
+    padding: 1.5rem;
+    /* Reduced internal padding from 2.5rem */
   }
 
   .form-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .form-group.full {
+    grid-column: span 1 !important;
+  }
+
+  .group-tracking-container {
     grid-template-columns: 1fr;
+    gap: 2rem;
+  }
+
+  .group-list-sidebar {
+    border-right: none;
+    padding-right: 0;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 2rem;
+    overflow: hidden;
+    /* Prevent list from leaking out */
+  }
+
+  /* Fix for group name overflow */
+  .group-list-sidebar .nav-item span {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+
+  /* Fix for detail content overflow like placeholder text */
+  .group-detail-content {
+    padding-top: 2rem;
+    word-break: break-word;
+    /* Wrap long words if any */
+  }
+
+  .group-detail-content p {
+    max-width: 100%;
+    margin: 0 auto;
   }
 }
 

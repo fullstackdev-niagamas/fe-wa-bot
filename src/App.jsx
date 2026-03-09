@@ -683,9 +683,9 @@ function App() {
 
         {activeTab === 'groups' && (
           <div className="card animate-fade">
-            <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: '2rem' }}>
+            <div className="group-tracking-container">
               {/* Groups List */}
-              <div style={{ borderRight: '1px solid rgba(255,255,255,0.1)', paddingRight: '1rem' }}>
+              <div className="group-list-sidebar">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                   <h3 style={{ fontSize: '1rem' }}>Available Groups</h3>
                   <button onClick={fetchGroups} className="btn-icon" style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer' }}>
@@ -716,7 +716,7 @@ function App() {
               </div>
 
               {/* Group Detail & Tracking View */}
-              <div>
+              <div className="group-detail-content">
                 {selectedGroup ? (
                   <div className="animate-fade">
                     <div style={{ marginBottom: '2rem', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '1rem' }}>
@@ -771,7 +771,7 @@ function App() {
                   <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}>
                     <div style={{ textAlign: 'center' }}>
                       <Users size={48} style={{ opacity: 0.1, marginBottom: '1rem' }} />
-                      <p>Select a group on the left to manage tracking</p>
+                      <p>Select a group from the list to manage tracking</p>
                     </div>
                   </div>
                 )}
