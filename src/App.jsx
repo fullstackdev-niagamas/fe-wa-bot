@@ -24,10 +24,12 @@ import {
   Download
 } from 'lucide-react';
 import './App.css';
+import * as XLSX from 'xlsx';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
 const API_KEY = import.meta.env.VITE_API_KEY || '';
 const WAHA_URL = import.meta.env.VITE_WAHA_URL || 'http://localhost:3000/api';
+const SHOW_SYSTEM_LOGS = import.meta.env.VITE_SHOW_SYSTEM_LOGS === 'true';
 
 // Helper to format number to IDR style (e.g. 1.500.000)
 const formatPrice = (value) => {
@@ -369,22 +371,34 @@ function App() {
     }
   };
 
-  const handleViewFile = async (e, url, fileName) => {
+  useEffect(() => {
+    fetchViewMessages()
+  }, [])
+
+  const handleViewFile = async (e, url, fileName, fileMimeType) => {
     e.preventDefault();
     if (!url) return;
     try {
-      addLog(`Fetching file from ${WAHA_URL}...`, 'info');
-      // Using WAHA_URL directly if it is a relative path or local WAHA path
-      // Actually, msg.file_url is likely the full URL already from the curl example
+      addLog(`Fetching ${fileName}...`, 'info');
       const response = await axios.get(url, {
         headers: { 'X-Api-Key': API_KEY },
         responseType: 'blob'
       });
-      const blob = new Blob([response.data], { type: response.headers['content-type'] });
+      // Use server mime type, but fallback to provided one if generic
+      let mimeType = response.headers['content-type'];
+
+      if ((!mimeType || mimeType.includes('application')) && fileMimeType) {
+        mimeType = fileMimeType;
+      }
+
+      const blob = new Blob([response.data], { type: mimeType });
       const blobUrl = URL.createObjectURL(blob);
+
+      // Open in new tab - correctly typed blobs will open inline if supported (like videos/images)
       window.open(blobUrl, '_blank');
-      addLog(`File ${fileName} opened in new tab`, 'success');
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 20000);
+
+      addLog(`Opened ${fileName}`, 'success');
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 30000);
     } catch (err) {
       addLog(`Failed to fetch file: ${err.message}`, 'error');
       showToast('Fetch failed!', 'error');
@@ -397,32 +411,40 @@ function App() {
       return;
     }
 
-    addLog('Exporting messages to CSV...', 'info');
+    addLog('Exporting messages to Excel...', 'info');
 
-    // Define headers
-    const headers = ['Sender Name', 'Sender Phone', 'Group Name', 'Message', 'Type', 'Timestamp', 'File URL'];
+    // Prepare data for XLSX
+    const data = viewMessages.map(msg => ({
+      'Sender Name': msg.sender_name || 'Unknown',
+      'Sender Phone': msg.sender_phone_number || '',
+      'Group Name': msg.group_name || '-',
+      'Message': msg.message_text || '',
+      'Type': msg.message_type || 'text',
+      'Timestamp': msg.message_timestamp ? new Date(msg.message_timestamp).toLocaleString() : '',
+      'File URL': msg.file_url || ''
+    }));
 
-    // Prepare data
-    const csvRows = viewMessages.map(msg => [
-      `"${(msg.sender_name || 'Unknown').toString().replace(/"/g, '""')}"`,
-      `"${(msg.sender_phone_number || '').toString().replace(/"/g, '""')}"`,
-      `"${(msg.group_name || '-').toString().replace(/"/g, '""')}"`,
-      `"${(msg.message_text || '').toString().replace(/"/g, '""').replace(/\n/g, ' ')}"`,
-      `"${(msg.message_type || 'text').toString().replace(/"/g, '""')}"`,
-      `"${msg.message_timestamp || ''}"`,
-      `"${(msg.file_url || '').toString().replace(/"/g, '""')}"`
-    ].join(','));
+    // Create worksheet
+    const worksheet = XLSX.utils.json_to_sheet(data);
 
-    // Combine headers and rows
-    const csvString = [headers.join(','), ...csvRows].join('\n');
-    const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", `inbound_messages_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    // Set column widths
+    const wscols = [
+      { wch: 20 }, // Sender Name
+      { wch: 15 }, // Sender Phone
+      { wch: 20 }, // Group Name
+      { wch: 40 }, // Message
+      { wch: 10 }, // Type
+      { wch: 20 }, // Timestamp
+      { wch: 30 }  // File URL
+    ];
+    worksheet['!cols'] = wscols;
+
+    // Create workbook
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Messages");
+
+    // Export file
+    XLSX.writeFile(workbook, `inbound_messages_${new Date().toISOString().slice(0, 10)}.xlsx`);
 
     addLog('Messages exported successfully!', 'success');
   };
@@ -980,7 +1002,7 @@ function App() {
                   disabled={viewMessages.length === 0}
                 >
                   <Download size={18} />
-                  <span>Export CSV</span>
+                  <span>Export Excel</span>
                 </button>
               </div>
             </div>
@@ -1015,7 +1037,7 @@ function App() {
                           <div
                             className="file-attachment"
                             style={{ cursor: 'pointer' }}
-                            onClick={(e) => handleViewFile(e, msg.file_url, msg.file_name)}
+                            onClick={(e) => handleViewFile(e, msg.file_url, msg.file_name, msg.file_mime_type)}
                           >
                             <Package size={14} />
                             <span>{msg.file_name || 'Attachment'}</span>
@@ -1055,15 +1077,17 @@ function App() {
           </div>
         )}
 
-        <div className="log-container">
-          <div style={{ color: '#64748b', fontSize: '0.7rem', textTransform: 'uppercase', marginBottom: '0.8rem', fontWeight: 'bold' }}>System Logs</div>
-          {logs.length === 0 && <div className="log-entry">Waiting for activity...</div>}
-          {logs.map((log, i) => (
-            <div key={i} className={`log-entry ${log.type}`}>
-              {log.text}
-            </div>
-          ))}
-        </div>
+        {SHOW_SYSTEM_LOGS &&
+          <div className="log-container">
+            <div style={{ color: '#64748b', fontSize: '0.7rem', textTransform: 'uppercase', marginBottom: '0.8rem', fontWeight: 'bold' }}>System Logs</div>
+            {logs.length === 0 && <div className="log-entry">Waiting for activity...</div>}
+            {logs.map((log, i) => (
+              <div key={i} className={`log-entry ${log.type}`}>
+                {log.text}
+              </div>
+            ))}
+          </div>
+        }
       </main>
 
       {/* Toast Notifications */}
