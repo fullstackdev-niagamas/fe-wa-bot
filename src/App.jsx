@@ -979,7 +979,7 @@ function App() {
         )}
 
         {activeTab === 'messages' && (
-          <div className="card animate-fade">
+          <div className="card messages-card animate-fade">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
               <div>
                 <h2>Inbound Messages</h2>
@@ -1008,7 +1008,7 @@ function App() {
             </div>
 
             <div className="messages-table-container">
-              {viewMessages.length === 0 ? (
+              {!viewMessages[0]?.id ? (
                 <div className="empty-state">
                   <MessageSquare size={48} />
                   <p>No messages found. Click refresh to fetch data.</p>
@@ -1032,7 +1032,9 @@ function App() {
                         {msg.group_name}
                       </div>
                       <div className="grid-col message-content">
-                        <div className="text-body">{msg.message_text || <span className="empty-text">(No text)</span>}</div>
+                        <div className="text-body">
+                          {msg.message_text ? (msg.message_text.length > 40 ? msg.message_text.substring(0, 40) + '...' : msg.message_text) : <span className="empty-text">(No text)</span>}
+                        </div>
                         {(msg.file_url) && (
                           <div
                             className="file-attachment"
