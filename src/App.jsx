@@ -21,10 +21,17 @@ import {
   X,
   FileUp,
   ClipboardList,
-  Download
+  Download,
+  LogOut,
+  User as UserIcon,
+  ShieldAlert
 } from 'lucide-react';
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import './App.css';
 import * as XLSX from 'xlsx';
+import Login from './components/Login';
+import UserManagement from './components/UserManagement';
+
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
 const API_KEY = import.meta.env.VITE_API_KEY || '';
@@ -38,7 +45,7 @@ const formatPrice = (value) => {
   return number.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
 };
 
-function App() {
+function Dashboard({ user, onLogout }) {
   const availableTabs = [
     { id: 'reminder', label: 'Reminder Tagihan', title: 'Billing Reminder', icon: <Calendar size={20} /> },
     { id: 'promo', label: 'Broadcast Promo', title: 'Promo Broadcast', icon: <Megaphone size={20} /> },
@@ -46,11 +53,16 @@ function App() {
     { id: 'messages', label: 'View Message', title: 'Inbound Messages', icon: <MessageSquare size={20} /> },
     { id: 'recordings', label: 'Call Recordings', title: 'Call Recordings', icon: <Mic size={20} /> },
     { id: 'sessions', label: 'WAHA Sessions', title: 'WAHA Sessions', icon: <Settings size={20} /> },
+    { id: 'users', label: 'User', title: 'User Management', icon: <UserIcon size={20} /> },
   ];
 
   const disabledMenus = (import.meta.env.VITE_DISABLED_MENUS || "").split(',').map(s => s.trim());
-  const enabledTabs = availableTabs.filter(tab => !disabledMenus.includes(tab.id));
-  const initialTab = enabledTabs[0]?.id || 'reminder';
+  const roleFilteredTabs = user.role === 'superadmin'
+    ? availableTabs
+    : availableTabs.filter(tab => tab.id === 'messages');
+
+  const enabledTabs = roleFilteredTabs.filter(tab => !disabledMenus.includes(tab.id));
+  const initialTab = enabledTabs[0]?.id || 'messages';
 
   const [activeTab, setActiveTab] = useState(initialTab);
   const [logs, setLogs] = useState([]);
@@ -492,12 +504,30 @@ function App() {
         </nav>
 
         <div className="sidebar-footer">
+          <div className="user-profile" style={{ marginBottom: '1rem', padding: '0.5rem', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{ background: 'var(--primary)', padding: '8px', borderRadius: '50%', color: 'white' }}>
+                <UserIcon size={16} />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <span style={{ color: 'white', fontSize: '0.9rem', fontWeight: '600' }}>{user.username}</span>
+                <span style={{ color: 'var(--text-sidebar)', fontSize: '0.7rem', textTransform: 'uppercase' }}>{user.role}</span>
+              </div>
+            </div>
+          </div>
+
           <div className="status-success">
             <div className="status-dot"></div>
             Connected
           </div>
+
+          <button className="logout-btn" onClick={onLogout}>
+            <LogOut size={18} />
+            <span>Logout</span>
+          </button>
         </div>
       </div>
+
 
       {/* Overlay for mobile drawer */}
       {sidebarOpen && <div className="nav-overlay" onClick={() => setSidebarOpen(false)}></div>}
@@ -511,7 +541,7 @@ function App() {
           <p>Manage your WhatsApp marketing and notifications from here.</p>
         </div>
 
-        {activeTab === 'reminder' && (
+        {activeTab === 'reminder' && user.role === 'superadmin' && (
           <div className="card animate-fade">
             <div className="tab-toggle-container">
               <button
@@ -652,7 +682,7 @@ function App() {
           </div>
         )}
 
-        {activeTab === 'promo' && (
+        {activeTab === 'promo' && user.role === 'superadmin' && (
           <div className="card animate-fade">
             <div className="tab-toggle-container">
               <button
@@ -796,7 +826,7 @@ function App() {
           </div>
         )}
 
-        {activeTab === 'groups' && (
+        {activeTab === 'groups' && user.role === 'superadmin' && (
           <div className="card animate-fade">
             <div className="group-tracking-container">
               {/* Groups List */}
@@ -895,7 +925,7 @@ function App() {
           </div>
         )}
 
-        {activeTab === 'recordings' && (
+        {activeTab === 'recordings' && user.role === 'superadmin' && (
           <div className="card animate-fade">
             <form onSubmit={handleUploadRecording}>
               <div className="form-grid">
@@ -1063,7 +1093,7 @@ function App() {
           </div>
         )}
 
-        {activeTab === 'sessions' && (
+        {activeTab === 'sessions' && user.role === 'superadmin' && (
           <div className="card animate-fade">
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem' }}>
               <h2>Active Sessions</h2>
@@ -1078,6 +1108,11 @@ function App() {
             )}
           </div>
         )}
+
+        {activeTab === 'users' && user.role === 'superadmin' && (
+          <UserManagement addLog={addLog} showToast={showToast} />
+        )}
+
 
         {SHOW_SYSTEM_LOGS &&
           <div className="log-container">
@@ -1105,4 +1140,37 @@ function App() {
   );
 }
 
+function App() {
+  const [user, setUser] = useState(() => {
+    const savedUser = localStorage.getItem('user');
+    return savedUser ? JSON.parse(savedUser) : null;
+  });
+
+  const handleLogin = (userData) => {
+    setUser(userData);
+    localStorage.setItem('user', JSON.stringify(userData));
+  };
+
+  const handleLogout = () => {
+    setUser(null);
+    localStorage.removeItem('user');
+  };
+
+  return (
+    <Router>
+      <Routes>
+        <Route
+          path="/login"
+          element={user ? <Navigate to="/" replace /> : <Login onLogin={handleLogin} />}
+        />
+        <Route
+          path="/*"
+          element={user ? <Dashboard user={user} onLogout={handleLogout} /> : <Navigate to="/login" replace />}
+        />
+      </Routes>
+    </Router>
+  );
+}
+
 export default App;
+
